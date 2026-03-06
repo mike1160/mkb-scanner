@@ -62,6 +62,9 @@ export default function DashboardPage() {
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
   const [editEmail, setEditEmail] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
+  const [tableFilter, setTableFilter] = useState<"alle" | "te_benaderen" | "gemaild" | "geconverteerd">("alle");
+  const [inlineEmail, setInlineEmail] = useState<Record<number, string>>({});
+  const [savingInlineEmail, setSavingInlineEmail] = useState<number | null>(null);
 
   const loadSites = async () => {
     try {
@@ -82,6 +85,15 @@ export default function DashboardPage() {
   useEffect(() => {
     if (selectedSite) setEditEmail(selectedSite.email ?? "");
   }, [selectedSite?.id]);
+
+  const filteredSites =
+    tableFilter === "alle"
+      ? sites
+      : tableFilter === "te_benaderen"
+        ? sites.filter((s) => s.status === "PENDING" || s.status === "SCANNED")
+        : tableFilter === "gemaild"
+          ? sites.filter((s) => s.status === "EMAILED")
+          : sites.filter((s) => s.status === "CONVERTED");
 
   const totalScanned = sites.length;
   const avgScore =
@@ -141,6 +153,27 @@ export default function DashboardPage() {
       alert("E-mail verzenden mislukt");
     } finally {
       setSendingEmail(null);
+    }
+  };
+
+  const handleSaveInlineEmail = async (siteId: number, email: string) => {
+    const trimmed = email.trim();
+    if (!trimmed) return;
+    setSavingInlineEmail(siteId);
+    try {
+      const res = await fetch("/api/scan", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, email: trimmed }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setSites((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+        setSelectedSite((prev) => (prev?.id === siteId ? updated : prev));
+        setInlineEmail((prev) => ({ ...prev, [siteId]: "" }));
+      }
+    } finally {
+      setSavingInlineEmail(null);
     }
   };
 
@@ -271,15 +304,41 @@ export default function DashboardPage() {
 
         {/* 3. Sites tabel */}
         <section className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-          <h2 className="text-lg font-semibold text-slate-200 p-5 pb-0">
-            Gescande sites
-          </h2>
+          <div className="p-5 pb-2 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-slate-200">
+              Gescande sites
+            </h2>
+            <div className="flex gap-2 flex-wrap">
+              {(["alle", "te_benaderen", "gemaild", "geconverteerd"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setTableFilter(f)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                    tableFilter === f
+                      ? "bg-emerald-600 text-white"
+                      : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                  }`}
+                >
+                  {f === "alle"
+                    ? "Alle"
+                    : f === "te_benaderen"
+                      ? "Te benaderen"
+                      : f === "gemaild"
+                        ? "Gemaild"
+                        : "Geconverteerd"}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-slate-700">
                   <th className="p-3 text-slate-400 font-medium text-sm">
                     Bedrijfsnaam / URL
+                  </th>
+                  <th className="p-3 text-slate-400 font-medium text-sm">
+                    Email
                   </th>
                   <th className="p-3 text-slate-400 font-medium text-sm">
                     AVG Score
@@ -300,7 +359,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {sites.map((site) => (
+                {filteredSites.map((site) => (
                   <tr
                     key={site.id}
                     onClick={() => setSelectedSite(site)}
@@ -315,6 +374,41 @@ export default function DashboardPage() {
                       <p className="text-slate-500 text-sm truncate max-w-[200px]">
                         {site.url}
                       </p>
+                    </td>
+                    <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                      {site.email ? (
+                        <span className="text-slate-300 text-sm truncate max-w-[180px] block">
+                          {site.email}
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="email"
+                            placeholder="email@..."
+                            value={inlineEmail[site.id] ?? ""}
+                            onChange={(e) =>
+                              setInlineEmail((prev) => ({
+                                ...prev,
+                                [site.id]: e.target.value,
+                              }))
+                            }
+                            onBlur={(e) => {
+                              const v = e.target.value.trim();
+                              if (v) handleSaveInlineEmail(site.id, v);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                const v = (e.target as HTMLInputElement).value.trim();
+                                if (v) handleSaveInlineEmail(site.id, v);
+                              }
+                            }}
+                            className="w-32 min-w-0 rounded px-2 py-1 bg-slate-700 border border-slate-600 text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                          {savingInlineEmail === site.id && (
+                            <span className="text-slate-500 text-xs">…</span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="p-3">
                       <span
@@ -385,9 +479,11 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
-          {sites.length === 0 && (
+          {filteredSites.length === 0 && (
             <p className="p-6 text-slate-500 text-center">
-              Nog geen sites. Voer een URL in en klik op Scan.
+              {sites.length === 0
+                ? "Nog geen sites. Voer een URL in en klik op Scan."
+                : "Geen sites in deze filter."}
             </p>
           )}
         </section>

@@ -3,12 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 
+type ResultStatus = "SCANNED" | "EMAILED" | "CONVERTED";
+
 interface ScanResultItem {
   url: string;
   success: boolean;
   score?: number;
   companyName?: string | null;
   error?: string;
+  siteId?: number;
+  email?: string | null;
+  status?: ResultStatus;
 }
 
 function isValidUrl(url: string): boolean {
@@ -28,12 +33,26 @@ function scoreColor(score: number): string {
   return "text-emerald-400";
 }
 
+function statusBadgeClass(status: ResultStatus): string {
+  switch (status) {
+    case "SCANNED":
+      return "bg-blue-500/30 text-blue-300";
+    case "EMAILED":
+      return "bg-violet-500/30 text-violet-300";
+    case "CONVERTED":
+      return "bg-emerald-500/30 text-emerald-300";
+    default:
+      return "bg-slate-500/30 text-slate-300";
+  }
+}
+
 export default function ImportPage() {
   const [urlsText, setUrlsText] = useState("");
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [results, setResults] = useState<ScanResultItem[]>([]);
   const [done, setDone] = useState(false);
+  const [sendingMailId, setSendingMailId] = useState<number | null>(null);
 
   const validUrls = urlsText
     .split(/\r?\n/)
@@ -69,6 +88,9 @@ export default function ImportPage() {
             success: true,
             score: data.avgScore,
             companyName: data.companyName,
+            siteId: data.id,
+            email: data.email ?? null,
+            status: (data.status === "EMAILED" || data.status === "CONVERTED" ? data.status : "SCANNED") as ResultStatus,
           });
         } else {
           collected.push({
@@ -92,6 +114,29 @@ export default function ImportPage() {
     setImporting(false);
   };
 
+  const handleSendMail = async (siteId: number) => {
+    setSendingMailId(siteId);
+    try {
+      const res = await fetch("/api/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId }),
+      });
+      if (res.ok) {
+        setResults((prev) =>
+          prev.map((r) => (r.siteId === siteId ? { ...r, status: "EMAILED" as ResultStatus } : r))
+        );
+      } else {
+        const data = await res.json();
+        alert(data.error ?? "E-mail verzenden mislukt");
+      }
+    } catch {
+      alert("E-mail verzenden mislukt");
+    } finally {
+      setSendingMailId(null);
+    }
+  };
+
   const successCount = results.filter((r) => r.success).length;
   const scores = results.filter((r) => r.success && r.score != null).map((r) => r.score!);
   const avgScore =
@@ -107,7 +152,7 @@ export default function ImportPage() {
             href="/dashboard"
             className="text-slate-400 hover:text-slate-200 flex items-center gap-1"
           >
-            ← Terug naar dashboard
+            ← Naar dashboard
           </Link>
         </div>
 
@@ -175,17 +220,31 @@ export default function ImportPage() {
             <ul className="divide-y divide-slate-700 max-h-[400px] overflow-y-auto">
               {results.map((item, i) => (
                 <li
-                  key={`${item.url}-${i}`}
-                  className="p-4 flex flex-wrap items-center justify-between gap-2"
+                  key={`${item.url}-${i}-${item.siteId ?? ""}`}
+                  className="p-4 flex flex-wrap items-center justify-between gap-3"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-slate-200 font-medium truncate">
                       {item.companyName ?? item.url}
                     </p>
                     <p className="text-slate-500 text-sm truncate">{item.url}</p>
+                    {item.success && item.email && (
+                      <p className="text-slate-400 text-xs mt-0.5 truncate">
+                        {item.email}
+                      </p>
+                    )}
                   </div>
-                  <div className="flex items-center gap-3">
-                    {item.success && item.score != null ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {item.success && item.status && (
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(
+                          item.status
+                        )}`}
+                      >
+                        {item.status}
+                      </span>
+                    )}
+                    {item.success && item.score != null && (
                       <span
                         className={`font-bold tabular-nums ${scoreColor(
                           item.score
@@ -193,15 +252,25 @@ export default function ImportPage() {
                       >
                         {item.score}
                       </span>
-                    ) : (
+                    )}
+                    {!item.success && (
                       <span className="text-red-400 text-sm">
                         {item.error ?? "Fout"}
                       </span>
                     )}
-                    {item.success ? (
-                      <span className="text-emerald-400 text-sm">✓</span>
-                    ) : (
-                      <span className="text-red-400 text-sm">✗</span>
+                    {item.success && item.siteId && (
+                      <button
+                        onClick={() => handleSendMail(item.siteId!)}
+                        disabled={
+                          !item.email ||
+                          sendingMailId === item.siteId ||
+                          item.status === "EMAILED" ||
+                          item.status === "CONVERTED"
+                        }
+                        className="px-2 py-1 rounded bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {sendingMailId === item.siteId ? "…" : "Mail versturen"}
+                      </button>
                     )}
                   </div>
                 </li>
