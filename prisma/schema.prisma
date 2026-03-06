@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ScannedSite {
+  id                    Int      @id @default(autoincrement())
+  url                   String   @unique
+  companyName           String?
+  email                 String?
+  screenshotUrl         String?
+  hasSSL                Boolean  @default(false)
+  hasCookieBanner       Boolean  @default(false)
+  hasPrivacyPage        Boolean  @default(false)
+  hasContactForm        Boolean  @default(false)
+  contactFormHasConsent Boolean  @default(false)
+  avgScore              Int      @default(0)
+  status                Status   @default(PENDING)
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+enum Status {
+  PENDING
+  SCANNED
+  EMAILED
+  CONVERTED
+}
