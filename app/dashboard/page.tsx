@@ -62,6 +62,8 @@ export default function DashboardPage() {
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
   const [editEmail, setEditEmail] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
+  const [editUrl, setEditUrl] = useState("");
+  const [savingUrl, setSavingUrl] = useState(false);
   const [tableFilter, setTableFilter] = useState<"alle" | "te_benaderen" | "gemaild" | "geconverteerd">("alle");
   const [inlineEmail, setInlineEmail] = useState<Record<number, string>>({});
   const [savingInlineEmail, setSavingInlineEmail] = useState<number | null>(null);
@@ -92,7 +94,10 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedSite) setEditEmail(selectedSite.email ?? "");
+    if (selectedSite) {
+      setEditEmail(selectedSite.email ?? "");
+      setEditUrl(selectedSite.url ?? "");
+    }
   }, [selectedSite?.id]);
 
   useEffect(() => {
@@ -305,6 +310,32 @@ export default function DashboardPage() {
       }
     } finally {
       setSavingEmail(false);
+    }
+  };
+
+  const handleSaveUrl = async () => {
+    if (!selectedSite || !editUrl.trim()) return;
+    setSavingUrl(true);
+    try {
+      const res = await fetch("/api/scan", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId: selectedSite.id, url: editUrl.trim() }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setSites((prev) =>
+          prev.map((s) => (s.id === updated.id ? updated : s))
+        );
+        setSelectedSite(updated);
+      } else {
+        const data = await res.json();
+        alert(data.error ?? "URL bijwerken mislukt");
+      }
+    } catch {
+      alert("URL bijwerken mislukt");
+    } finally {
+      setSavingUrl(false);
     }
   };
 
@@ -774,6 +805,27 @@ export default function DashboardPage() {
             </div>
             <div className="grid md:grid-cols-2 gap-6">
               <div className="space-y-4">
+                <div>
+                  <label className="block text-slate-400 text-sm mb-1">
+                    URL
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                    <input
+                      type="url"
+                      value={editUrl}
+                      onChange={(e) => setEditUrl(e.target.value)}
+                      placeholder="https://voorbeeld.nl"
+                      className="flex-1 min-w-[200px] rounded-lg bg-slate-700 border border-slate-600 text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <button
+                      onClick={handleSaveUrl}
+                      disabled={savingUrl || editUrl.trim() === selectedSite.url}
+                      className="px-3 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingUrl ? "…" : "Opslaan"}
+                    </button>
+                  </div>
+                </div>
                 <p className="text-slate-400 text-sm">
                   Aangemaakt:{" "}
                   {new Date(selectedSite.createdAt).toLocaleDateString("nl-NL", {

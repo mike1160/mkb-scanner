@@ -110,6 +110,7 @@ export async function PATCH(request: NextRequest) {
     const siteId = typeof body?.siteId === "number" ? body.siteId : null;
     const status = body?.status;
     const email = typeof body?.email === "string" ? body.email.trim() : undefined;
+    const url = typeof body?.url === "string" ? body.url.trim() : undefined;
 
     if (siteId == null) {
       return NextResponse.json(
@@ -118,17 +119,32 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const data: { status?: Status; email?: string | null } = {};
+    const data: { status?: Status; email?: string | null; url?: string } = {};
     if (status !== undefined && Object.values(Status).includes(status as Status)) {
       data.status = status as Status;
     }
     if (email !== undefined) {
       data.email = email || null;
     }
+    if (url !== undefined) {
+      if (!url) {
+        return NextResponse.json(
+          { error: "URL mag niet leeg zijn" },
+          { status: 400 }
+        );
+      }
+      if (!isValidUrl(url)) {
+        return NextResponse.json(
+          { error: "Ongeldige URL (gebruik http:// of https://)" },
+          { status: 400 }
+        );
+      }
+      data.url = url;
+    }
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json(
-        { error: "Geef status en/of email op" },
+        { error: "Geef status, email en/of url op" },
         { status: 400 }
       );
     }
