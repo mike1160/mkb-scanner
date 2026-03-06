@@ -22,7 +22,6 @@ function scoreColor(score: number): string {
 export function generateEmailHTML(data: EmailTemplateData): string {
   const {
     companyName,
-    url: _url,
     avgScore,
     hasSSL,
     hasCookieBanner,
