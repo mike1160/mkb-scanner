@@ -41,7 +41,7 @@ export default function ImportPage() {
     .map((line) => line.trim())
     .filter((line) => isValidNlUrl(line));
 
-  const uniqueUrls = [...new Set(validUrls)];
+  const uniqueUrls = Array.from(new Set(validUrls));
 
   const handleImport = async () => {
     if (uniqueUrls.length === 0) return;
