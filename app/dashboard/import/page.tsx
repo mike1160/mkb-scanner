@@ -129,7 +129,7 @@ export default function ImportPage() {
           />
           <p className="mt-2 text-slate-500 text-sm">
             {uniqueUrls.length > 0
-              ? `${uniqueUrls.length} geldige URL(s) gevonden`
+              ? `${uniqueUrls.length} geldige URLs gevonden`
               : "Plak URLs, één per regel (http:// of https://)."}
           </p>
         </section>

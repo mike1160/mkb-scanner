@@ -192,9 +192,17 @@ export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-slate-900 text-slate-100 p-6 md:p-8">
       <div className="max-w-7xl mx-auto space-y-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-50">
-          MKB Scanner Dashboard
-        </h1>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-50">
+            MKB Scanner Dashboard
+          </h1>
+          <Link
+            href="/dashboard/import"
+            className="px-4 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white font-medium"
+          >
+            Bulk Import
+          </Link>
+        </div>
 
         {/* 1. Statistieken */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -255,12 +263,6 @@ export default function DashboardPage() {
                 "Scan"
               )}
             </button>
-            <Link
-              href="/dashboard/import"
-              className="px-5 py-2.5 rounded-lg bg-slate-600 hover:bg-slate-500 text-white font-medium flex items-center justify-center gap-2 min-w-[120px] whitespace-nowrap"
-            >
-              Bulk Import
-            </Link>
           </div>
           {scanError && (
             <p className="mt-2 text-sm text-red-400">{scanError}</p>
