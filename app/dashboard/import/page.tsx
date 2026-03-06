@@ -122,7 +122,7 @@ export default function ImportPage() {
           <textarea
             value={urlsText}
             onChange={(e) => setUrlsText(e.target.value)}
-            placeholder={"https://voorbeeld.nl\nhttps://example.com/contact"}
+            placeholder={"https://example.com\nhttps://example.org/contact"}
             rows={12}
             className="w-full rounded-lg bg-slate-700 border border-slate-600 text-slate-100 px-4 py-3 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono text-sm resize-y min-h-[200px]"
             disabled={importing}

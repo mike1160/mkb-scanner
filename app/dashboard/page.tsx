@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type Status = "PENDING" | "SCANNED" | "EMAILED" | "CONVERTED";
@@ -233,7 +234,7 @@ export default function DashboardPage() {
           <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="url"
-              placeholder="https://voorbeeld.nl"
+              placeholder="https://example.com"
               value={scanUrl}
               onChange={(e) => setScanUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleScan()}
@@ -254,6 +255,12 @@ export default function DashboardPage() {
                 "Scan"
               )}
             </button>
+            <Link
+              href="/dashboard/import"
+              className="px-5 py-2.5 rounded-lg bg-slate-600 hover:bg-slate-500 text-white font-medium flex items-center justify-center gap-2 min-w-[120px] whitespace-nowrap"
+            >
+              Bulk Import
+            </Link>
           </div>
           {scanError && (
             <p className="mt-2 text-sm text-red-400">{scanError}</p>
