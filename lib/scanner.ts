@@ -36,22 +36,34 @@ const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 const PHONE_REGEX = /(?:\+31|0)\s?[1-9][0-9\s\-]{7,14}/g;
 const CITY_WORDS = /\b(?:Amsterdam|Rotterdam|Den Haag|'s-Gravenhage|Utrecht|Eindhoven|Groningen|Tilburg|Almere|Breda|Nijmegen|Enschede|Haarlem|Arnhem|Zaanstad|Zwolle|Maastricht|Leiden|Dordrecht|Zoetermeer|Woerden|Apeldoorn|Hoorn)\b/i;
 
+const PREFERRED_EMAIL_PREFIXES = ["info@", "contact@", "admin@", "hallo@", "hello@", "sales@", "support@"];
+
+function pickPreferredEmail(candidates: string[]): string | null {
+  if (!candidates.length) return null;
+  const trimmed = candidates.map((e) => e.trim()).filter((e) => e.includes("@"));
+  for (const pref of PREFERRED_EMAIL_PREFIXES) {
+    const found = trimmed.find((e) => e.toLowerCase().startsWith(pref));
+    if (found) return found;
+  }
+  return trimmed[0] ?? null;
+}
+
 function extractEmail(html: string): string | null {
   const $ = cheerio.load(html);
-  const mailtoLinks = $('a[href^="mailto:"]');
-  for (let i = 0; i < mailtoLinks.length; i++) {
-    const href = (mailtoLinks[i].attribs?.href ?? "").replace(/^mailto:/i, "").split("?")[0].trim();
-    if (href && href.includes("@")) return href;
-  }
+  const mailtoEmails: string[] = [];
+  $('a[href^="mailto:"]').each((_, el) => {
+    const href = (el.attribs?.href ?? "").replace(/^mailto:/i, "").split("?")[0].trim();
+    if (href && href.includes("@")) mailtoEmails.push(href);
+  });
+  const fromMailto = pickPreferredEmail(mailtoEmails);
+  if (fromMailto) return fromMailto;
+
   const text = $("body").text();
   const matches = text.match(EMAIL_REGEX);
   if (matches?.length) {
-    const preferred = ["info@", "contact@", "admin@", "hello@", "sales@", "support@"];
-    for (const pref of preferred) {
-      const found = matches.find((m) => m.toLowerCase().startsWith(pref));
-      if (found) return found;
-    }
-    return matches[0];
+    const found = pickPreferredEmail([...matches]);
+    if (found) return found;
+    return matches[0].trim();
   }
   return null;
 }

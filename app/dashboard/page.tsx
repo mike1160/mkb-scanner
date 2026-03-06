@@ -65,6 +65,8 @@ export default function DashboardPage() {
   const [tableFilter, setTableFilter] = useState<"alle" | "te_benaderen" | "gemaild" | "geconverteerd">("alle");
   const [inlineEmail, setInlineEmail] = useState<Record<number, string>>({});
   const [savingInlineEmail, setSavingInlineEmail] = useState<number | null>(null);
+  const [mailModalSite, setMailModalSite] = useState<ScannedSite | null>(null);
+  const [mailModalEmail, setMailModalEmail] = useState("");
 
   const loadSites = async () => {
     try {
@@ -132,25 +134,81 @@ export default function DashboardPage() {
     }
   };
 
-  const handleSendEmail = async (siteId: number) => {
+  const handleSendEmail = async (siteId: number, emailOverride?: string) => {
     setSendingEmail(siteId);
     try {
       const res = await fetch("/api/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteId }),
+        body: JSON.stringify(
+          emailOverride ? { siteId, email: emailOverride } : { siteId }
+        ),
       });
       const data = await res.json();
       if (res.ok) {
         await loadSites();
         setSelectedSite((prev) =>
-          prev?.id === siteId ? { ...prev, status: "EMAILED" } : prev
+          prev?.id === siteId ? { ...prev, status: "EMAILED" as const } : prev
         );
+        setMailModalSite(null);
+        setMailModalEmail("");
       } else {
         alert(data.error ?? "E-mail verzenden mislukt");
       }
     } catch {
       alert("E-mail verzenden mislukt");
+    } finally {
+      setSendingEmail(null);
+    }
+  };
+
+  const handleMailClick = (site: ScannedSite) => {
+    if (site.status === "EMAILED" || site.status === "CONVERTED") return;
+    if (site.email?.trim()) {
+      handleSendEmail(site.id);
+    } else {
+      setMailModalSite(site);
+      setMailModalEmail("");
+    }
+  };
+
+  const handleMailModalSubmit = async () => {
+    const email = mailModalEmail.trim();
+    if (!mailModalSite || !email) return;
+    const siteId = mailModalSite.id;
+    setSendingEmail(siteId);
+    try {
+      const patchRes = await fetch("/api/scan", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, email }),
+      });
+      if (!patchRes.ok) {
+        const d = await patchRes.json();
+        alert(d.error ?? "Opslaan mislukt");
+        return;
+      }
+      await loadSites();
+      const emailRes = await fetch("/api/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, email }),
+      });
+      const data = await emailRes.json();
+      if (emailRes.ok) {
+        setSites((prev) =>
+          prev.map((s) => (s.id === siteId ? { ...s, email, status: "EMAILED" as const } : s))
+        );
+        setSelectedSite((prev) =>
+          prev?.id === siteId ? { ...prev, email, status: "EMAILED" } : prev
+        );
+        setMailModalSite(null);
+        setMailModalEmail("");
+      } else {
+        alert(data.error ?? "E-mail verzenden mislukt");
+      }
+    } catch {
+      alert("Er is iets misgegaan");
     } finally {
       setSendingEmail(null);
     }
@@ -198,18 +256,20 @@ export default function DashboardPage() {
     }
   };
 
-  const handleSetConverted = async (siteId: number) => {
+  const handleSetConverted = async (site: ScannedSite) => {
+    const siteId = site.id;
+    const nextStatus = site.status === "CONVERTED" ? "SCANNED" : "CONVERTED";
     setUpdatingStatus(siteId);
     try {
       const res = await fetch("/api/scan", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteId, status: "CONVERTED" }),
+        body: JSON.stringify({ siteId, status: nextStatus }),
       });
       if (res.ok) {
         await loadSites();
         setSelectedSite((prev) =>
-          prev?.id === siteId ? { ...prev, status: "CONVERTED" } : prev
+          prev?.id === siteId ? { ...prev, status: nextStatus } : prev
         );
       } else {
         const data = await res.json();
@@ -322,10 +382,10 @@ export default function DashboardPage() {
                   {f === "alle"
                     ? "Alle"
                     : f === "te_benaderen"
-                      ? "Te benaderen"
+                      ? "Nieuw"
                       : f === "gemaild"
                         ? "Gemaild"
-                        : "Geconverteerd"}
+                        : "Klant"}
                 </button>
               ))}
             </div>
@@ -452,25 +512,26 @@ export default function DashboardPage() {
                     <td className="p-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleSendEmail(site.id)}
+                          onClick={() => handleMailClick(site)}
                           disabled={
-                            !site.email ||
                             sendingEmail === site.id ||
-                            site.status === "EMAILED"
+                            site.status === "EMAILED" ||
+                            site.status === "CONVERTED"
                           }
                           className="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {sendingEmail === site.id ? "…" : "Mail"}
                         </button>
                         <button
-                          onClick={() => handleSetConverted(site.id)}
-                          disabled={
-                            updatingStatus === site.id ||
-                            site.status === "CONVERTED"
-                          }
+                          onClick={() => handleSetConverted(site)}
+                          disabled={updatingStatus === site.id}
                           className="px-3 py-1.5 rounded-lg bg-slate-600 hover:bg-slate-500 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {updatingStatus === site.id ? "…" : "Geconverteerd"}
+                          {updatingStatus === site.id
+                            ? "…"
+                            : site.status === "CONVERTED"
+                              ? "Terugzetten"
+                              : "Klant geworden"}
                         </button>
                       </div>
                     </td>
@@ -600,11 +661,11 @@ export default function DashboardPage() {
                   </span>
                 </div>
                 <button
-                  onClick={() => handleSendEmail(selectedSite.id)}
+                  onClick={() => handleMailClick(selectedSite)}
                   disabled={
-                    !selectedSite.email ||
                     sendingEmail === selectedSite.id ||
-                    selectedSite.status === "EMAILED"
+                    selectedSite.status === "EMAILED" ||
+                    selectedSite.status === "CONVERTED"
                   }
                   className="mt-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -615,6 +676,57 @@ export default function DashboardPage() {
               </div>
             </div>
           </section>
+        )}
+
+        {/* Mail modal: handmatig e-mailadres invullen als geen email */}
+        {mailModalSite && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+            onClick={() => {
+              if (!sendingEmail) setMailModalSite(null);
+            }}
+          >
+            <div
+              className="bg-slate-800 rounded-xl border border-slate-700 p-6 w-full max-w-md shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-slate-200 mb-1">
+                E-mailadres invoeren
+              </h3>
+              <p className="text-slate-400 text-sm mb-4">
+                {mailModalSite.companyName || mailModalSite.url} heeft nog geen
+                e-mailadres. Vul het in om de mail te versturen.
+              </p>
+              <input
+                type="email"
+                value={mailModalEmail}
+                onChange={(e) => setMailModalEmail(e.target.value)}
+                placeholder="info@voorbeeld.nl"
+                className="w-full rounded-lg bg-slate-700 border border-slate-600 text-slate-100 px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                autoFocus
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    if (!sendingEmail) setMailModalSite(null);
+                  }}
+                  disabled={!!sendingEmail}
+                  className="px-4 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white text-sm disabled:opacity-50"
+                >
+                  Annuleren
+                </button>
+                <button
+                  onClick={handleMailModalSubmit}
+                  disabled={!mailModalEmail.trim() || sendingEmail === mailModalSite.id}
+                  className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {sendingEmail === mailModalSite.id
+                    ? "Bezig…"
+                    : "Opslaan en versturen"}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </main>

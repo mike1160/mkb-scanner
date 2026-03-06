@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const siteId = typeof body?.siteId === "number" ? body.siteId : null;
+    const bodyEmail = typeof body?.email === "string" ? body.email.trim() : null;
 
     if (siteId == null) {
       return NextResponse.json(
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const site = await prisma.scannedSite.findUnique({
+    let site = await prisma.scannedSite.findUnique({
       where: { id: siteId },
     });
 
@@ -28,10 +29,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const email = site.email?.trim();
+    let email = site.email?.trim();
+    if (!email && bodyEmail) {
+      site = await prisma.scannedSite.update({
+        where: { id: siteId },
+        data: { email: bodyEmail },
+      });
+      email = bodyEmail;
+    }
     if (!email) {
       return NextResponse.json(
-        { error: "Geen e-mailadres gekoppeld aan deze site" },
+        { error: "Geen e-mailadres gekoppeld aan deze site. Stuur email mee in de request body of vul het in op het dashboard." },
         { status: 400 }
       );
     }
