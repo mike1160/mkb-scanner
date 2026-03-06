@@ -67,6 +67,13 @@ export default function DashboardPage() {
   const [savingInlineEmail, setSavingInlineEmail] = useState<number | null>(null);
   const [mailModalSite, setMailModalSite] = useState<ScannedSite | null>(null);
   const [mailModalEmail, setMailModalEmail] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"score" | "name" | "date">("score");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  const [page, setPage] = useState(1);
+
+  const PAGE_SIZE = 25;
 
   const loadSites = async () => {
     try {
@@ -88,7 +95,11 @@ export default function DashboardPage() {
     if (selectedSite) setEditEmail(selectedSite.email ?? "");
   }, [selectedSite?.id]);
 
-  const filteredSites =
+  useEffect(() => {
+    setPage(1);
+  }, [tableFilter, searchQuery]);
+
+  const filteredByTab =
     tableFilter === "alle"
       ? sites
       : tableFilter === "te_benaderen"
@@ -96,6 +107,47 @@ export default function DashboardPage() {
         : tableFilter === "gemaild"
           ? sites.filter((s) => s.status === "EMAILED")
           : sites.filter((s) => s.status === "CONVERTED");
+
+  const searchLower = searchQuery.trim().toLowerCase();
+  const filteredSites = searchLower
+    ? filteredByTab.filter((s) => {
+        const name = (s.companyName ?? "").toLowerCase();
+        const url = (s.url ?? "").toLowerCase();
+        const city = (s.city ?? "").toLowerCase();
+        const email = (s.email ?? "").toLowerCase();
+        return name.includes(searchLower) || url.includes(searchLower) || city.includes(searchLower) || email.includes(searchLower);
+      })
+    : filteredByTab;
+
+  const sortedSites = [...filteredSites].sort((a, b) => {
+    if (sortBy === "score") {
+      return sortDir === "asc" ? a.avgScore - b.avgScore : b.avgScore - a.avgScore;
+    }
+    if (sortBy === "name") {
+      const na = (a.companyName || a.url).toLowerCase();
+      const nb = (b.companyName || b.url).toLowerCase();
+      const cmp = na.localeCompare(nb);
+      return sortDir === "asc" ? cmp : -cmp;
+    }
+    const da = new Date(a.createdAt).getTime();
+    const db = new Date(b.createdAt).getTime();
+    return sortDir === "asc" ? da - db : db - da;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(sortedSites.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginatedSites = sortedSites.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const countAlle = sites.length;
+  const countNieuw = sites.filter((s) => s.status === "PENDING" || s.status === "SCANNED").length;
+  const countGemaild = sites.filter((s) => s.status === "EMAILED").length;
+  const countKlant = sites.filter((s) => s.status === "CONVERTED").length;
+
+  const handleSort = (column: "score" | "name" | "date") => {
+    if (sortBy === column) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else setSortBy(column);
+    setPage(1);
+  };
 
   const totalScanned = sites.length;
   const avgScore =
@@ -285,17 +337,30 @@ export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-slate-900 text-slate-100 p-6 md:p-8">
       <div className="max-w-7xl mx-auto space-y-8">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <h1 className="text-2xl md:text-3xl font-bold text-slate-50">
-            MKB Scanner Dashboard
+            MKB Scanner CRM
           </h1>
           <Link
             href="/dashboard/import"
-            className="px-4 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white font-medium"
+            className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-lg shadow-emerald-900/20 inline-flex items-center justify-center"
           >
             Bulk Import
           </Link>
         </div>
+
+        {/* Zoekbalk */}
+        <section className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+          <label className="sr-only" htmlFor="search">Zoeken</label>
+          <input
+            id="search"
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Zoek op bedrijfsnaam, URL, stad of e-mail…"
+            className="w-full rounded-lg bg-slate-700 border border-slate-600 text-slate-100 px-4 py-2.5 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </section>
 
         {/* 1. Statistieken */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -362,64 +427,94 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {/* 3. Sites tabel */}
+        {/* 3. Filter tabs + view toggle + content */}
         <section className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-          <div className="p-5 pb-2 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-slate-200">
-              Gescande sites
-            </h2>
+          <div className="p-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-700">
             <div className="flex gap-2 flex-wrap">
               {(["alle", "te_benaderen", "gemaild", "geconverteerd"] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setTableFilter(f)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                  className={`px-4 py-2 rounded-lg text-sm font-medium ${
                     tableFilter === f
                       ? "bg-emerald-600 text-white"
                       : "bg-slate-700 text-slate-300 hover:bg-slate-600"
                   }`}
                 >
                   {f === "alle"
-                    ? "Alle"
+                    ? `Alle (${countAlle})`
                     : f === "te_benaderen"
-                      ? "Nieuw"
+                      ? `Nieuw (${countNieuw})`
                       : f === "gemaild"
-                        ? "Gemaild"
-                        : "Klant"}
+                        ? `Gemaild (${countGemaild})`
+                        : `Klant (${countKlant})`}
                 </button>
               ))}
             </div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 text-sm">Weergave:</span>
+              <button
+                onClick={() => setViewMode("table")}
+                className={`px-3 py-1.5 rounded-lg text-sm ${viewMode === "table" ? "bg-slate-600 text-white" : "bg-slate-700 text-slate-400 hover:bg-slate-600"}`}
+              >
+                Tabel
+              </button>
+              <button
+                onClick={() => setViewMode("cards")}
+                className={`px-3 py-1.5 rounded-lg text-sm ${viewMode === "cards" ? "bg-slate-600 text-white" : "bg-slate-700 text-slate-400 hover:bg-slate-600"}`}
+              >
+                Kaartjes
+              </button>
+            </div>
           </div>
+
+          {viewMode === "table" && (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-slate-700">
                   <th className="p-3 text-slate-400 font-medium text-sm">
-                    Bedrijfsnaam / URL
+                    <button
+                      type="button"
+                      onClick={() => handleSort("name")}
+                      className="hover:text-slate-200 flex items-center gap-1"
+                    >
+                      Bedrijfsnaam / URL
+                      {sortBy === "name" && (sortDir === "asc" ? " ↑" : " ↓")}
+                    </button>
                   </th>
                   <th className="p-3 text-slate-400 font-medium text-sm">
                     Email
                   </th>
                   <th className="p-3 text-slate-400 font-medium text-sm">
-                    AVG Score
+                    <button
+                      type="button"
+                      onClick={() => handleSort("score")}
+                      className="hover:text-slate-200 flex items-center gap-1"
+                    >
+                      AVG Score
+                      {sortBy === "score" && (sortDir === "asc" ? " ↑" : " ↓")}
+                    </button>
                   </th>
                   <th className="p-3 text-slate-400 font-medium text-sm">SSL</th>
+                  <th className="p-3 text-slate-400 font-medium text-sm">Cookie</th>
+                  <th className="p-3 text-slate-400 font-medium text-sm">Privacy</th>
                   <th className="p-3 text-slate-400 font-medium text-sm">
-                    Cookie
+                    <button
+                      type="button"
+                      onClick={() => handleSort("date")}
+                      className="hover:text-slate-200 flex items-center gap-1"
+                    >
+                      Datum
+                      {sortBy === "date" && (sortDir === "asc" ? " ↑" : " ↓")}
+                    </button>
                   </th>
-                  <th className="p-3 text-slate-400 font-medium text-sm">
-                    Privacy
-                  </th>
-                  <th className="p-3 text-slate-400 font-medium text-sm">
-                    Status
-                  </th>
-                  <th className="p-3 text-slate-400 font-medium text-sm">
-                    Acties
-                  </th>
+                  <th className="p-3 text-slate-400 font-medium text-sm">Status</th>
+                  <th className="p-3 text-slate-400 font-medium text-sm">Acties</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredSites.map((site) => (
+                {paginatedSites.map((site) => (
                   <tr
                     key={site.id}
                     onClick={() => setSelectedSite(site)}
@@ -431,9 +526,15 @@ export default function DashboardPage() {
                       <p className="font-medium text-slate-200 truncate max-w-[200px]">
                         {site.companyName || site.url}
                       </p>
-                      <p className="text-slate-500 text-sm truncate max-w-[200px]">
+                      <a
+                        href={site.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-slate-500 text-sm truncate max-w-[200px] block hover:text-emerald-400 hover:underline"
+                      >
                         {site.url}
-                      </p>
+                      </a>
                     </td>
                     <td className="p-3" onClick={(e) => e.stopPropagation()}>
                       {site.email ? (
@@ -500,6 +601,13 @@ export default function DashboardPage() {
                         <span className="text-red-400">✗</span>
                       )}
                     </td>
+                    <td className="p-3 text-slate-400 text-sm whitespace-nowrap">
+                      {new Date(site.createdAt).toLocaleDateString("nl-NL", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </td>
                     <td className="p-3">
                       <span
                         className={`inline-block px-2.5 py-1 rounded-md text-xs font-medium ${statusBadgeClass(
@@ -540,12 +648,112 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
-          {filteredSites.length === 0 && (
+          )}
+
+          {viewMode === "cards" && (
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {paginatedSites.map((site) => (
+                <div
+                  key={site.id}
+                  onClick={() => setSelectedSite(site)}
+                  className={`rounded-xl border p-4 cursor-pointer transition-colors ${
+                    selectedSite?.id === site.id
+                      ? "bg-slate-700 border-emerald-500"
+                      : "bg-slate-800 border-slate-700 hover:bg-slate-700/80"
+                  }`}
+                >
+                  <p className="font-medium text-slate-200 truncate">
+                    {site.companyName || site.url}
+                  </p>
+                  <a
+                    href={site.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-slate-500 text-sm truncate block hover:text-emerald-400 hover:underline mt-0.5"
+                  >
+                    {site.url}
+                  </a>
+                  <div className="mt-3 flex items-center gap-2 flex-wrap">
+                    <span
+                      className={`inline-flex items-center justify-center w-9 h-9 rounded-lg font-bold text-sm ${scoreBgColor(
+                        site.avgScore
+                      )}`}
+                    >
+                      {site.avgScore}
+                    </span>
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(
+                        site.status
+                      )}`}
+                    >
+                      {site.status}
+                    </span>
+                  </div>
+                  {site.email && (
+                    <p className="text-slate-400 text-xs truncate mt-2">
+                      {site.email}
+                    </p>
+                  )}
+                  <div className="mt-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => handleMailClick(site)}
+                      disabled={
+                        sendingEmail === site.id ||
+                        site.status === "EMAILED" ||
+                        site.status === "CONVERTED"
+                      }
+                      className="px-2 py-1 rounded bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium disabled:opacity-50"
+                    >
+                      {sendingEmail === site.id ? "…" : "Mail"}
+                    </button>
+                    <button
+                      onClick={() => handleSetConverted(site)}
+                      disabled={updatingStatus === site.id}
+                      className="px-2 py-1 rounded bg-slate-600 hover:bg-slate-500 text-white text-xs font-medium disabled:opacity-50"
+                    >
+                      {site.status === "CONVERTED" ? "Terugzetten" : "Klant"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {(filteredSites.length === 0 || paginatedSites.length === 0) && (
             <p className="p-6 text-slate-500 text-center">
               {sites.length === 0
                 ? "Nog geen sites. Voer een URL in en klik op Scan."
-                : "Geen sites in deze filter."}
+                : searchQuery
+                  ? "Geen resultaten voor deze zoekopdracht."
+                  : "Geen sites in deze filter."}
             </p>
+          )}
+
+          {sortedSites.length > 0 && (
+            <div className="p-4 border-t border-slate-700 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-slate-500 text-sm">
+                Pagina {safePage} van {totalPages}
+                {" · "}
+                {sortedSites.length} resultaten
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage <= 1}
+                  className="px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                >
+                  Vorige
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage >= totalPages}
+                  className="px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                >
+                  Volgende
+                </button>
+              </div>
+            </div>
           )}
         </section>
 
