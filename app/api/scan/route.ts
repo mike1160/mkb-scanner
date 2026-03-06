@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { scanWebsite } from "@/lib/scanner";
 import { Status } from "@prisma/client";
 
-function isValidNlUrl(url: string): boolean {
+function isValidUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     return parsed.protocol === "https:" || parsed.protocol === "http:";
@@ -46,14 +46,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!url.toLowerCase().endsWith(".nl")) {
-      return NextResponse.json(
-        { error: "URL moet eindigen op .nl" },
-        { status: 400 }
-      );
-    }
-
-    if (!isValidNlUrl(url)) {
+    if (!isValidUrl(url)) {
       return NextResponse.json(
         { error: "Ongeldige URL" },
         { status: 400 }

@@ -378,7 +378,7 @@ export default function DashboardPage() {
           </div>
           {sites.length === 0 && (
             <p className="p-6 text-slate-500 text-center">
-              Nog geen sites. Voer een .nl URL in en klik op Scan.
+              Nog geen sites. Voer een URL in en klik op Scan.
             </p>
           )}
         </section>

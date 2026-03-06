@@ -11,10 +11,9 @@ interface ScanResultItem {
   error?: string;
 }
 
-function isValidNlUrl(url: string): boolean {
+function isValidUrl(url: string): boolean {
   const trimmed = url.trim();
   if (!trimmed) return false;
-  if (!trimmed.toLowerCase().endsWith(".nl")) return false;
   try {
     const parsed = new URL(trimmed);
     return parsed.protocol === "https:" || parsed.protocol === "http:";
@@ -39,7 +38,7 @@ export default function ImportPage() {
   const validUrls = urlsText
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => isValidNlUrl(line));
+    .filter((line) => isValidUrl(line));
 
   const uniqueUrls = Array.from(new Set(validUrls));
 
@@ -118,20 +117,20 @@ export default function ImportPage() {
 
         <section className="bg-slate-800 rounded-xl p-5 border border-slate-700">
           <label className="block text-slate-300 font-medium mb-2">
-            URLs (één per regel, alleen .nl)
+            URLs (één per regel, http(s)://)
           </label>
           <textarea
             value={urlsText}
             onChange={(e) => setUrlsText(e.target.value)}
-            placeholder={"https://voorbeeld.nl\nhttps://anderbedrijf.nl"}
+            placeholder={"https://voorbeeld.nl\nhttps://example.com/contact"}
             rows={12}
             className="w-full rounded-lg bg-slate-700 border border-slate-600 text-slate-100 px-4 py-3 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono text-sm resize-y min-h-[200px]"
             disabled={importing}
           />
           <p className="mt-2 text-slate-500 text-sm">
             {uniqueUrls.length > 0
-              ? `${uniqueUrls.length} geldige .nl URL(s) gevonden`
-              : "Plak URLs, één per regel. Alleen geldige .nl-adressen worden gescand."}
+              ? `${uniqueUrls.length} geldige URL(s) gevonden`
+              : "Plak URLs, één per regel (http:// of https://)."}
           </p>
         </section>
 
