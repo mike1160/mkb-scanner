@@ -14,6 +14,9 @@ export interface ScanResult {
   contactFormHasConsent: boolean;
   avgScore: number;
   companyName: string | null;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
 }
 
 const emptyResult = (): ScanResult => ({
@@ -24,7 +27,50 @@ const emptyResult = (): ScanResult => ({
   contactFormHasConsent: false,
   avgScore: 0,
   companyName: null,
+  email: null,
+  phone: null,
+  city: null,
 });
+
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+const PHONE_REGEX = /(?:\+31|0)\s?[1-9][0-9\s\-]{7,14}/g;
+const CITY_WORDS = /\b(?:Amsterdam|Rotterdam|Den Haag|'s-Gravenhage|Utrecht|Eindhoven|Groningen|Tilburg|Almere|Breda|Nijmegen|Enschede|Haarlem|Arnhem|Zaanstad|Zwolle|Maastricht|Leiden|Dordrecht|Zoetermeer|Woerden|Apeldoorn|Hoorn)\b/i;
+
+function extractEmail(html: string): string | null {
+  const $ = cheerio.load(html);
+  const mailtoLinks = $('a[href^="mailto:"]');
+  for (let i = 0; i < mailtoLinks.length; i++) {
+    const href = (mailtoLinks[i].attribs?.href ?? "").replace(/^mailto:/i, "").split("?")[0].trim();
+    if (href && href.includes("@")) return href;
+  }
+  const text = $("body").text();
+  const matches = text.match(EMAIL_REGEX);
+  if (matches?.length) {
+    const preferred = ["info@", "contact@", "admin@", "hello@", "sales@", "support@"];
+    for (const pref of preferred) {
+      const found = matches.find((m) => m.toLowerCase().startsWith(pref));
+      if (found) return found;
+    }
+    return matches[0];
+  }
+  return null;
+}
+
+function extractPhone(html: string): string | null {
+  const text = cheerio.load(html)("body").text();
+  const matches = text.match(PHONE_REGEX);
+  if (matches && matches.length) {
+    const cleaned = matches[0].replace(/\s+/g, " ").trim();
+    return cleaned.length >= 8 ? cleaned : null;
+  }
+  return null;
+}
+
+function extractCity(html: string): string | null {
+  const text = cheerio.load(html)("body").text();
+  const match = text.match(CITY_WORDS);
+  return match ? match[0] : null;
+}
 
 function hasCookieOrConsentInSelector($: cheerio.CheerioAPI): boolean {
   const all = $("[id], [class]");
@@ -148,6 +194,9 @@ export async function scanWebsite(url: string): Promise<ScanResult> {
       contactFormHasConsent,
       avgScore: 0,
       companyName: extractCompanyInfo(html),
+      email: extractEmail(html),
+      phone: extractPhone(html),
+      city: extractCity(html),
     };
 
     result.avgScore = calculateScore(result);
@@ -161,6 +210,9 @@ export async function scanWebsite(url: string): Promise<ScanResult> {
       contactFormHasConsent: false,
       avgScore: 0,
       companyName: extractCompanyInfo(html),
+      email: null,
+      phone: null,
+      city: null,
     };
   }
 }

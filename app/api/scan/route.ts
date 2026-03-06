@@ -87,6 +87,9 @@ export async function POST(request: NextRequest) {
       data: {
         url,
         companyName: scanResult.companyName ?? undefined,
+        email: scanResult.email ?? undefined,
+        phone: scanResult.phone ?? undefined,
+        city: scanResult.city ?? undefined,
         screenshotUrl: screenshotUrl ?? undefined,
         hasSSL: scanResult.hasSSL,
         hasCookieBanner: scanResult.hasCookieBanner,
@@ -113,24 +116,33 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const siteId = typeof body?.siteId === "number" ? body.siteId : null;
     const status = body?.status;
+    const email = typeof body?.email === "string" ? body.email.trim() : undefined;
 
-    if (siteId == null || !status) {
+    if (siteId == null) {
       return NextResponse.json(
-        { error: "siteId en status zijn verplicht" },
+        { error: "siteId is verplicht" },
         { status: 400 }
       );
     }
 
-    if (!Object.values(Status).includes(status as Status)) {
+    const data: { status?: Status; email?: string | null } = {};
+    if (status !== undefined && Object.values(Status).includes(status as Status)) {
+      data.status = status as Status;
+    }
+    if (email !== undefined) {
+      data.email = email || null;
+    }
+
+    if (Object.keys(data).length === 0) {
       return NextResponse.json(
-        { error: "Ongeldige status" },
+        { error: "Geef status en/of email op" },
         { status: 400 }
       );
     }
 
     const site = await prisma.scannedSite.update({
       where: { id: siteId },
-      data: { status: status as Status },
+      data,
     });
 
     return NextResponse.json(site);

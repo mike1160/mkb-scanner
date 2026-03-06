@@ -12,6 +12,8 @@ model ScannedSite {
   url                   String   @unique
   companyName           String?
   email                 String?
+  phone                 String?
+  city                  String?
   screenshotUrl         String?
   hasSSL                Boolean  @default(false)
   hasCookieBanner       Boolean  @default(false)

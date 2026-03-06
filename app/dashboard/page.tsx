@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
 
 type Status = "PENDING" | "SCANNED" | "EMAILED" | "CONVERTED";
@@ -10,6 +9,8 @@ interface ScannedSite {
   url: string;
   companyName: string | null;
   email: string | null;
+  phone: string | null;
+  city: string | null;
   screenshotUrl: string | null;
   hasSSL: boolean;
   hasCookieBanner: boolean;
@@ -58,6 +59,8 @@ export default function DashboardPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [sendingEmail, setSendingEmail] = useState<number | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
 
   const loadSites = async () => {
     try {
@@ -74,6 +77,10 @@ export default function DashboardPage() {
   useEffect(() => {
     loadSites();
   }, []);
+
+  useEffect(() => {
+    if (selectedSite) setEditEmail(selectedSite.email ?? "");
+  }, [selectedSite?.id]);
 
   const totalScanned = sites.length;
   const avgScore =
@@ -103,7 +110,8 @@ export default function DashboardPage() {
       }
       setSites((prev) => [data, ...prev]);
       setScanUrl("");
-      setSelectedSite(data);
+        setSelectedSite(data);
+        setEditEmail(data.email ?? "");
     } catch {
       setScanError("Scan mislukt");
     } finally {
@@ -132,6 +140,27 @@ export default function DashboardPage() {
       alert("E-mail verzenden mislukt");
     } finally {
       setSendingEmail(null);
+    }
+  };
+
+  const handleSaveEmail = async () => {
+    if (!selectedSite) return;
+    setSavingEmail(true);
+    try {
+      const res = await fetch("/api/scan", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId: selectedSite.id, email: editEmail }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setSites((prev) =>
+          prev.map((s) => (s.id === updated.id ? updated : s))
+        );
+        setSelectedSite(updated);
+      }
+    } finally {
+      setSavingEmail(false);
     }
   };
 
@@ -370,22 +399,48 @@ export default function DashboardPage() {
               </button>
             </div>
             <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                {selectedSite.screenshotUrl ? (
-                  <div className="rounded-lg overflow-hidden border border-slate-600 relative w-full aspect-video">
-                    <Image
-                      src={selectedSite.screenshotUrl}
-                      alt="Screenshot"
-                      fill
-                      className="object-contain"
-                      unoptimized
-                    />
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-slate-600 bg-slate-700/50 flex items-center justify-center h-48 text-slate-500">
-                    Geen screenshot
-                  </div>
+              <div className="space-y-4">
+                <p className="text-slate-400 text-sm">
+                  Aangemaakt:{" "}
+                  {new Date(selectedSite.createdAt).toLocaleDateString("nl-NL", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </p>
+                {selectedSite.phone && (
+                  <p className="text-slate-300">
+                    <span className="text-slate-500">Telefoon: </span>
+                    {selectedSite.phone}
+                  </p>
                 )}
+                {selectedSite.city && (
+                  <p className="text-slate-300">
+                    <span className="text-slate-500">Stad/gemeente: </span>
+                    {selectedSite.city}
+                  </p>
+                )}
+                <div>
+                  <label className="block text-slate-400 text-sm mb-1">
+                    E-mailadres
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                    <input
+                      type="email"
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      placeholder="info@voorbeeld.nl"
+                      className="flex-1 min-w-[200px] rounded-lg bg-slate-700 border border-slate-600 text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <button
+                      onClick={handleSaveEmail}
+                      disabled={savingEmail}
+                      className="px-3 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white text-sm disabled:opacity-50"
+                    >
+                      {savingEmail ? "…" : "Opslaan"}
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="space-y-4">
                 <p className="text-slate-400 text-sm">AVG-checklist</p>
