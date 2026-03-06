@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 
 type Status = "PENDING" | "SCANNED" | "EMAILED" | "CONVERTED";
@@ -103,7 +104,7 @@ export default function DashboardPage() {
       setSites((prev) => [data, ...prev]);
       setScanUrl("");
       setSelectedSite(data);
-    } catch (e) {
+    } catch {
       setScanError("Scan mislukt");
     } finally {
       setScanning(false);
@@ -127,7 +128,7 @@ export default function DashboardPage() {
       } else {
         alert(data.error ?? "E-mail verzenden mislukt");
       }
-    } catch (e) {
+    } catch {
       alert("E-mail verzenden mislukt");
     } finally {
       setSendingEmail(null);
@@ -151,7 +152,7 @@ export default function DashboardPage() {
         const data = await res.json();
         alert(data.error ?? "Update mislukt");
       }
-    } catch (e) {
+    } catch {
       alert("Update mislukt");
     } finally {
       setUpdatingStatus(null);
@@ -371,11 +372,13 @@ export default function DashboardPage() {
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 {selectedSite.screenshotUrl ? (
-                  <div className="rounded-lg overflow-hidden border border-slate-600">
-                    <img
+                  <div className="rounded-lg overflow-hidden border border-slate-600 relative w-full aspect-video">
+                    <Image
                       src={selectedSite.screenshotUrl}
                       alt="Screenshot"
-                      className="w-full h-auto"
+                      fill
+                      className="object-contain"
+                      unoptimized
                     />
                   </div>
                 ) : (
